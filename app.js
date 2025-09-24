@@ -583,13 +583,13 @@ const initBot = async () => {
     const adapterFlow = createFlow([
       flowPrincipal,
       flowMisPedidos,
-      flowDetallePedido,
       flowEstadoPedido,
       flowProductos,
       flowContacto,
       flowPedidosActivos,
       flowAyuda,
       flowEstadisticas,
+      flowDetallePedido,
       flowNoReconocido,
     ]);
 
