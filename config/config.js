@@ -342,7 +342,8 @@ const config = {
   mensajes: {
     bienvenida: {
       principal: "🛍️ ¡Hola! Bienvenido a nuestro sistema de pedidos",
-      opciones: "🔍 ¿Qué te gustaría hacer hoy?",
+      opciones:
+        "🔍 ¿Qué te gustaría hacer hoy?\n Puedes consultar lo siguiente:\n• *Mis pedidos*\n• *Nuevo pedido*\n• *Modificar pedido*\n• *Ayuda*",
       primerUso:
         "👋 ¡Es la primera vez que nos escribes! Te hemos registrado automáticamente.",
     },
@@ -384,11 +385,11 @@ const config = {
   // Configuración de horarios de atención
   horarios: {
     dias: {
-      lunes: { inicio: 9, fin: 18 },
-      martes: { inicio: 9, fin: 18 },
-      miercoles: { inicio: 9, fin: 18 },
-      jueves: { inicio: 9, fin: 18 },
-      viernes: { inicio: 9, fin: 18 },
+      lunes: { inicio: 9, fin: 20 },
+      martes: { inicio: 9, fin: 20 },
+      miercoles: { inicio: 9, fin: 20 },
+      jueves: { inicio: 9, fin: 20 },
+      viernes: { inicio: 9, fin: 20 },
       sabado: { activo: false },
       domingo: { activo: false },
     },

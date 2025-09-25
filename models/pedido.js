@@ -269,6 +269,16 @@ class Pedido {
   }
 
   /**
+   * Verificar si un pedido puede ser modificado
+   * @param {string} status - Estado actual del pedido
+   * @returns {boolean} True si se puede modificar
+   */
+  static puedeModificarse(status) {
+    const estadosModificables = ["pending", "processing"];
+    return estadosModificables.includes(status.toLowerCase());
+  }
+
+  /**
    * Obtener resumen de ventas por período
    * @param {string} periodo - Período ('day', 'week', 'month', 'year')
    * @returns {Array} Resumen de ventas

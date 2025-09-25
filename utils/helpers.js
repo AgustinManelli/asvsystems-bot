@@ -288,7 +288,7 @@ function crearMensajeError(tipo, detalle = null) {
   const errores = {
     pedido_no_encontrado: "❌ No encontré ese pedido",
     usuario_no_registrado:
-      "❌ Usuario no registrado. Escribe *hola* para comenzar",
+      "❌ No te encuentras registrado, accedé a https://asvsystems.com.ar/app/auth y registrate. Ten en cuenta que al momento de registrarte debes poner tu número de teléfono para poder acceder a todas las funcionalidades en WhatsApp.",
     sin_pedidos: "📦 No tienes pedidos registrados aún",
     error_conexion: "🔧 Error de conexión. Intenta más tarde",
     formato_invalido: "⚠️ Formato inválido. Verifica los datos",
@@ -410,7 +410,7 @@ function validarHorarioAtencion(fecha = null) {
 
   // Horario: Lunes a Viernes 9am-6pm
   const esDiaHabil = dia >= 1 && dia <= 5;
-  const esHorarioAtencion = hora >= 9 && hora < 18;
+  const esHorarioAtencion = hora >= 9 && hora < 20;
   const estaAbierto = esDiaHabil && esHorarioAtencion;
 
   let proximaApertura = "";

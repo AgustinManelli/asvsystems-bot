@@ -73,48 +73,143 @@ setInterval(() => {
 }, 25 * 60 * 1000);
 
 // Flujo principal de bienvenida (sin cambios en la lógica)
-const flowPrincipal = addKeyword(config.comandos.saludo)
-  .addAnswer(
-    config.mensajes.bienvenida.principal,
-    null,
-    async (ctx, { flowDynamic }) => {
-      try {
-        await Usuario.crear(ctx.from, ctx.pushName);
-        // await Usuario.actualizarUltimoLogin(ctx.from);
+const flowPrincipal = addKeyword(config.comandos.saludo).addAnswer(
+  config.mensajes.bienvenida.principal,
+  null,
+  async (ctx, { flowDynamic, gotoFlow }) => {
+    try {
+      await Usuario.crear(ctx.from, ctx.pushName);
 
-        const horario = validarHorarioAtencion();
-        let mensajeBienvenida = config.mensajes.bienvenida.opciones;
-        if (!horario.estaAbierto) {
-          mensajeBienvenida += `\n\n${horario.mensaje}`;
-        }
+      await Conversacion.guardar(
+        ctx.from,
+        ctx.body,
+        config.mensajes.bienvenida.principal
+      );
 
-        await flowDynamic(mensajeBienvenida);
-        await Conversacion.guardar(
-          ctx.from,
-          ctx.body,
-          config.mensajes.bienvenida.principal
-        );
+      console.log(`✅ Usuario conectado: ${ctx.from} - ${ctx.pushName}`);
 
-        console.log(`✅ Usuario conectado: ${ctx.from} - ${ctx.pushName}`);
-      } catch (error) {
-        console.error("❌ Error en flowPrincipal:", error);
-        await flowDynamic(config.mensajes.errores.errorGenerico);
-      }
+      return gotoFlow(flowMenu);
+    } catch (error) {
+      console.error("❌ Error en flowPrincipal:", error);
+      await flowDynamic(config.mensajes.errores.errorGenerico);
     }
-  )
-  .addAnswer(config.mensajes.bienvenida.opciones, {
-    buttons: [
-      { body: "🛒 Mis Pedidos" },
-      { body: "📋 Nuevo Pedido" },
-      { body: "📞 Contacto" },
-    ],
-  });
+  }
+);
+
+const flowMenu = addKeyword("menu").addAnswer(
+  `Te dejo el menú rápido:\n\n` +
+    `1️⃣  Mis pedidos\n` +
+    `2️⃣  Ver catálogo / Productos\n` +
+    `3️⃣  Consultar estado de un pedido\n` +
+    `4️⃣  Modificar un pedido\n` +
+    `5️⃣  Pedidos activos / pendientes\n` +
+    `6️⃣  Contacto / Soporte\n` +
+    `7️⃣  Ayuda / Comandos\n\n` +
+    `Responde con el *número* (ej: 1) o escribe el *comando* (ej: mis pedidos).`,
+  { capture: true },
+  async (ctx, { flowDynamic, gotoFlow }) => {
+    try {
+      const texto = (ctx.body || "").toString().trim().toLowerCase();
+
+      // Guardar en historial
+      await Conversacion.guardar(ctx.from, ctx.body, "Menú principal");
+
+      // Mapeo por número
+      if (
+        /^1\b/.test(texto) ||
+        texto.includes("mis pedidos") ||
+        texto === "mis pedidos"
+      ) {
+        return gotoFlow(flowMisPedidos);
+      }
+
+      if (
+        /^2\b/.test(texto) ||
+        texto.includes("producto") ||
+        texto.includes("catálogo") ||
+        texto.includes("catalogo")
+      ) {
+        return gotoFlow(flowProductos);
+      }
+
+      if (/^3\b/.test(texto) || texto.includes("estado")) {
+        return gotoFlow(flowEstadoPedido);
+      }
+
+      if (
+        /^4\b/.test(texto) ||
+        texto.includes("modificar") ||
+        texto.includes("editar") ||
+        texto.includes("cambiar")
+      ) {
+        return gotoFlow(flowModificarPedido);
+      }
+
+      if (
+        /^5\b/.test(texto) ||
+        texto.includes("activos") ||
+        texto.includes("pendiente")
+      ) {
+        return gotoFlow(flowPedidosActivos);
+      }
+
+      if (
+        /^6\b/.test(texto) ||
+        texto.includes("contacto") ||
+        texto.includes("soporte")
+      ) {
+        return gotoFlow(flowContacto);
+      }
+
+      if (
+        /^7\b/.test(texto) ||
+        texto.includes("ayuda") ||
+        texto.includes("comandos")
+      ) {
+        return gotoFlow(flowAyuda);
+      }
+
+      // Si el usuario respondió un número pero fuera de rango
+      if (/^\d+$/.test(texto)) {
+        await flowDynamic(
+          "❌ Opción no válida. Por favor, elegí un número del 1 al 7 o escribe el comando.\n\n" +
+            "Ej: *1* para Mis pedidos o *productos* para ver el catálogo."
+        );
+        return gotoFlow(flowMenu);
+      }
+
+      // Si viene un texto libre, intentamos mapear por palabra clave
+      if (texto.includes("pedido") && texto.includes("mis")) {
+        return gotoFlow(flowMisPedidos);
+      }
+
+      // Si no matchea nada, pedimos que reintente
+      await flowDynamic(
+        "No entendí tu elección. Responde con un número (1-7) o escribe lo que querés hacer. Ej: *productos* o *modificar 123*."
+      );
+    } catch (error) {
+      console.error("❌ Error en flowMenu:", error);
+      await flowDynamic(config.mensajes.errores.errorGenerico);
+    }
+  }
+);
 
 // Flujo para consultar pedidos del usuario
 const flowMisPedidos = addKeyword([
+  // formas explícitas cortas
   "mis pedidos",
   "pedidos",
   "🛒 Mis Pedidos",
+
+  // variantes naturales — expresiones completas (RegExp)
+  // Ej: "quiero ver mis pedidos", "me gustaría ver mis órdenes", "mostrarme pedidos", "dame mis pedidos"
+  /^\s*(?:quiero|quieres|puedo|necesito|dame|mostrarme|mostrar|ver|consultar|me gustaría|me gustaria|quisiera|quisiese)\b.*\b(?:mis\s+)?(?:pedidos|ordenes|órdenes)\b.*$/i,
+
+  // Ej: "ver pedidos", "mostrar pedidos", "consultar ordenes"
+  /^\s*\b(?:ver|mostrar|consultar)\b.*\b(?:pedidos|ordenes|órdenes)\b.*$/i,
+
+  // fallback que captura "pedido(s)" u "orden(es)" con alguna palabra alrededor (evita ser extremadamente broad)
+  /\b(?:mis\s+)?(?:pedidos|ordenes|órdenes)\b/i,
 ]).addAnswer(
   crearMensajeCargando("pedidos"),
   null,
@@ -128,7 +223,6 @@ const flowMisPedidos = addKeyword([
       }
 
       const pedidos = await Pedido.obtenerPorUsuario(usuario.id);
-
       if (pedidos.length === 0) {
         await flowDynamic(
           crearMensajeError(
@@ -157,8 +251,9 @@ const flowMisPedidos = addKeyword([
           } pedidos más\n\n`;
         }
 
-        mensaje += "💡 Escribe el *número del pedido* para ver detalles\n";
-        mensaje += "📞 Escribe *contacto* si necesitas ayuda";
+        mensaje +=
+          "💡Puedes ver los detalles de un pedido escribiendo *ver* y el *número de tu pedido*. Por ejemplo: ver 39\n";
+        mensaje += "📞 Escribe *contacto* si necesitas ayuda.";
 
         await flowDynamic(mensaje);
       }
@@ -176,85 +271,57 @@ const flowMisPedidos = addKeyword([
 );
 
 // Flujo para ver detalles de un pedido específico
-const flowDetallePedido = addKeyword(".*").addAnswer(
-  crearMensajeCargando("detalles del pedido"),
+const flowDetallePedido = addKeyword(
+  [/^\s*(ver|detalle|mostrar)(?:\s+pedido)?\s+(\d+)\s*$/i],
+  {
+    regex: true,
+  }
+).addAnswer(
+  "🔍 Buscando detalles de tu pedido...",
   null,
   async (ctx, { flowDynamic }) => {
-    console.log(`⚡️ Flow Detalle Pedido activado con: "${ctx.body}"`);
     try {
-      const texto = (ctx.body || "").toString();
-      if (!/^\s*\d+\s*$/.test(texto)) return;
-      const numeroPedido = parseInt(ctx.body);
-      const usuario = await Usuario.obtenerPorTelefono(ctx.from);
+      const matches = ctx.body.match(/(\d+)/);
+      const numeroPedido = matches ? parseInt(matches[0]) : NaN;
+      if (isNaN(numeroPedido)) {
+        await flowDynamic("❌ No reconozco el número. Ej: *ver 123*");
+        return;
+      }
 
+      const usuario = await Usuario.obtenerPorTelefono(ctx.from);
       if (!usuario) {
         await flowDynamic(crearMensajeError("usuario_no_registrado"));
         return;
       }
 
       const pedido = await Pedido.obtenerDetalle(numeroPedido, usuario.id);
-
       if (!pedido) {
         await flowDynamic(
-          crearMensajeError(
-            "pedido_no_encontrado",
-            "Verifica el número de pedido o escribe *mis pedidos* para ver todos."
-          )
+          crearMensajeError("pedido_no_encontrado", "Verifica el número.")
         );
         return;
       }
 
       const items = await Pedido.obtenerItems(numeroPedido);
-
       let mensaje = `📋 *Detalle del Pedido #${pedido.id}*\n\n`;
       mensaje += `👤 Cliente: ${pedido.customer_name}\n`;
       mensaje += `📅 Fecha: ${formatearFecha(pedido.order_date)}\n`;
       mensaje += `📋 Estado: ${config.obtenerEmojiEstado(
         pedido.status
       )} ${pedido.status.toUpperCase()}\n`;
-      mensaje += `📞 Teléfono: ${pedido.customer_phone || "No especificado"}\n`;
-      mensaje += `🚚 Entrega: ${
-        pedido.delivery_method === "delivery"
-          ? "A domicilio"
-          : "Retiro en tienda"
-      }\n`;
-
-      if (pedido.delivery_address) {
-        mensaje += `📍 Dirección: ${pedido.delivery_address}\n`;
-      }
-
-      mensaje += `💳 Pago: ${
-        pedido.payment_method === "cash"
-          ? "Efectivo"
-          : pedido.payment_method === "card"
-          ? "Tarjeta"
-          : "Online"
-      }\n\n`;
-
+      mensaje += `💰 Total: ${formatearMoneda(pedido.total)}\n\n`;
       if (items.length > 0) {
-        mensaje += `🛍️ *Productos (${items.length}):*\n`;
-        let subtotal = 0;
-
-        items.forEach((item, index) => {
-          mensaje += `${index + 1}. ${item.name}\n`;
-          mensaje += `   💰 ${formatearMoneda(item.product_price)} x ${
-            item.quantity
-          } = ${formatearMoneda(item.line_total)}\n`;
-          subtotal += parseFloat(item.line_total);
+        mensaje += `🛍️ Productos:\n`;
+        items.forEach((it, i) => {
+          mensaje += `${i + 1}. ${it.name} — ${it.quantity} x ${formatearMoneda(
+            it.product_price
+          )} = ${formatearMoneda(it.line_total)}\n`;
         });
       }
-
-      mensaje += `\n💰 *Total: ${formatearMoneda(pedido.total)}*\n\n`;
-      mensaje += `📞 ¿Necesitas modificar algo? Escribe *contacto*`;
-
+      mensaje += `\n💡Si querés modificarlo escribe *modificar ${pedido.id}*`;
       await flowDynamic(mensaje);
-      await Conversacion.guardar(
-        ctx.from,
-        ctx.body,
-        `Detalles del pedido #${numeroPedido} consultados`
-      );
     } catch (error) {
-      console.error("❌ Error en flowDetallePedido:", error);
+      console.error("❌ Error en flowDetalleInline:", error);
       await flowDynamic(config.mensajes.errores.conexionBD);
     }
   }
@@ -262,14 +329,74 @@ const flowDetallePedido = addKeyword(".*").addAnswer(
 
 // Flujo para consultar estado específico de pedido
 const flowEstadoPedido = addKeyword(config.comandos.estado).addAnswer(
-  "🔍 Escribe el número de tu pedido para consultar su estado:",
+  "🔍 Escribe el número de tu pedido para consultar su estado o consulta tus pedidos con *Mis pedidos*:",
   null,
-  async (ctx, { flowDynamic }) => {
+  async (ctx, { flowDynamic, gotoFlow }) => {
     await Conversacion.guardar(
       ctx.from,
       ctx.body,
       "Solicitud de estado de pedido"
     );
+  }
+);
+
+const flowModificarPedido = addKeyword(
+  [/^\s*(modificar|editar|cambiar)(?:\s+pedido)?\s+(\d+)\s*$/i],
+  {
+    regex: true,
+  }
+).addAnswer(
+  "🔧 Buscando pedido...",
+  null,
+  async (ctx, { flowDynamic, state }) => {
+    try {
+      const matches = ctx.body.match(/(\d+)/);
+      const numeroPedido = matches ? parseInt(matches[0]) : NaN;
+      if (isNaN(numeroPedido)) {
+        await flowDynamic("❌ No reconozco el número. Ej: *modificar 123*");
+        return;
+      }
+
+      const usuario = await Usuario.obtenerPorTelefono(ctx.from);
+      if (!usuario) {
+        await flowDynamic(crearMensajeError("usuario_no_registrado"));
+        return;
+      }
+
+      const pedido = await Pedido.obtenerDetalle(numeroPedido, usuario.id);
+      if (!pedido) {
+        await flowDynamic(
+          crearMensajeError("pedido_no_encontrado", "Verifica el número.")
+        );
+        return;
+      }
+
+      if (!Pedido.puedeModificarse(pedido.status)) {
+        await flowDynamic(
+          `❌ No puedes modificar este pedido.\n📋 Estado: ${pedido.status.toUpperCase()}`
+        );
+        return;
+      }
+
+      // Guardar en estado para continuar el flujo de modificación
+      await state.update({
+        pedidoAModificar: pedido,
+        pendingAction: "modificar",
+      });
+
+      // Mostrar opciones para modificar (puedes reutilizar tu código existente)
+      const opcionesModificacion =
+        `🔧 *Pedido #${pedido.id} - Opciones:*\n\n` +
+        `• Cambiar dirección\n` +
+        `• Cambiar productos\n` +
+        `• Cancelar pedido\n\n` +
+        `Escribe la opción que deseas (por ejemplo: "direccion", "productos", "cancelar").`;
+
+      await flowDynamic(opcionesModificacion);
+    } catch (error) {
+      console.error("❌ Error en flowModificarPedidoInline:", error);
+      await flowDynamic(config.mensajes.errores.conexionBD);
+    }
   }
 );
 
@@ -293,7 +420,7 @@ const flowProductos = addKeyword([
         return;
       }
 
-      let mensaje = `🛍️ *Catálogo de Productos:*\n\n`;
+      let mensaje = `🛍️ *Catálogo de Productos Destacados:*\n\n`;
 
       const productosAgrupados = productos.reduce((grupos, producto) => {
         const categoria = producto.category || "Otros";
@@ -556,11 +683,6 @@ app.post("/send-message", async (req, res) => {
   }
 });
 
-// Invoke-RestMethod -Uri "http://localhost:3000/send-message" `
-// -Method POST `
-// -Headers @{ "Content-Type" = "application/json" } `
-// -Body '{"to":"5493571528770@c.us","text":"Hola desde PowerShell"}'
-
 // Función principal del bot
 const initBot = async () => {
   try {
@@ -582,8 +704,10 @@ const initBot = async () => {
     const adapterDB = new MySQLAdapter(config.database);
     const adapterFlow = createFlow([
       flowPrincipal,
+      flowMenu,
       flowMisPedidos,
       flowEstadoPedido,
+      flowModificarPedido,
       flowProductos,
       flowContacto,
       flowPedidosActivos,
